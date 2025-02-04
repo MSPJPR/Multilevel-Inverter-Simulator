@@ -1,65 +1,109 @@
-document.addEventListener("DOMContentLoaded", function () {
-    const canvas = document.getElementById("waveformCanvas");
-    const ctx = canvas.getContext("2d");
+function simulate() {
+    let inverterType = document.getElementById("inverterType").value;
+    let dcVoltage = parseFloat(document.getElementById("dcVoltage").value);
+    let frequency = parseFloat(document.getElementById("frequency").value);
+    let loadResistance = parseFloat(document.getElementById("loadResistance").value);
+
+    let canvas = document.getElementById("waveformCanvas");
+    let ctx = canvas.getContext("2d");
+
+    // Clear previous simulation
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Set canvas size
     canvas.width = 600;
     canvas.height = 300;
-});
 
-function simulate() {
-    const inverterType = document.getElementById("inverterType").value;
-    const dcVoltage = parseFloat(document.getElementById("dcVoltage").value);
-    const frequency = parseFloat(document.getElementById("frequency").value);
-    const loadResistance = parseFloat(document.getElementById("loadResistance").value);
+    let waveColor;
+    let waveData = [];
 
-    drawWaveform(inverterType, dcVoltage, frequency);
-    calculateTHD();
-}
-
-function drawWaveform(type, voltage, frequency) {
-    const canvas = document.getElementById("waveformCanvas");
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height / 2);
-    
-    let amplitude = (canvas.height / 2) * (voltage / 500);
-    let period = canvas.width / (frequency / 5);
-    
-    for (let x = 0; x < canvas.width; x++) {
-        let y = canvas.height / 2 + amplitude * Math.sin((2 * Math.PI * x) / period);
-        ctx.lineTo(x, y);
+    if (inverterType === "diodeClamped") {
+        waveColor = "blue";
+        waveData = generateWave(3, dcVoltage, frequency);
+    } else if (inverterType === "flyingCapacitor") {
+        waveColor = "red";
+        waveData = generateWave(5, dcVoltage, frequency);
+    } else if (inverterType === "cascade") {
+        waveColor = "green";
+        waveData = generateWave(7, dcVoltage, frequency);
     }
 
-    ctx.strokeStyle = "#007bff";
-    ctx.lineWidth = 2;
+    drawWave(ctx, waveData, waveColor);
+    calculateTHD(waveData, loadResistance);
+}
+
+function generateWave(levels, dcVoltage, frequency) {
+    let wave = [];
+    let step = Math.PI / 20;
+    
+    for (let i = 0; i < 40; i++) {
+        let value = Math.sin(i * step * frequency);
+        let quantized = Math.round(value * levels) / levels;
+        wave.push(quantized * dcVoltage / levels);
+    }
+
+    return wave;
+}
+
+function drawWave(ctx, waveData, color) {
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+
+    let x = 20;
+    for (let i = 0; i < waveData.length; i++) {
+        let y = 150 - waveData[i] * 0.5;
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+        x += 15;
+    }
+
     ctx.stroke();
 }
 
-function calculateTHD() {
-    let thd = (Math.random() * 10 + 1).toFixed(2);
-    document.getElementById("thdResult").innerText = `Total Harmonic Distortion (THD): ${thd}%`;
+function calculateTHD(waveData, loadResistance) {
+    let fundamental = 0;
+    let harmonics = 0;
+
+    for (let i = 1; i < waveData.length; i++) {
+        if (i === 1) {
+            fundamental = waveData[i];
+        } else {
+            harmonics += waveData[i] ** 2;
+        }
+    }
+
+    let thd = (Math.sqrt(harmonics) / fundamental) * 100;
+    document.getElementById("thdResult").innerText = `Total Harmonic Distortion (THD): ${thd.toFixed(2)}%`;
 }
 
 function downloadWaveform() {
-    const canvas = document.getElementById("waveformCanvas");
-    const link = document.createElement("a");
-    link.download = "waveform.png";
+    let canvas = document.getElementById("waveformCanvas");
+    let link = document.createElement('a');
+    link.download = 'waveform.png';
     link.href = canvas.toDataURL();
     link.click();
 }
 
 function downloadCSV() {
-    let csvContent = "data:text/csv;charset=utf-8,Time (ms),Voltage (V)\n";
-    for (let t = 0; t <= 100; t += 1) {
-        let voltage = (200 * Math.sin((2 * Math.PI * t) / 20)).toFixed(2);
-        csvContent += `${t},${voltage}\n`;
-    }
+    let inverterType = document.getElementById("inverterType").value;
+    let dcVoltage = parseFloat(document.getElementById("dcVoltage").value);
+    let frequency = parseFloat(document.getElementById("frequency").value);
+    let loadResistance = parseFloat(document.getElementById("loadResistance").value);
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Parameter,Value\n";
+    csvContent += `Inverter Type,${inverterType}\n`;
+    csvContent += `DC Voltage (V),${dcVoltage}\n`;
+    csvContent += `Switching Frequency (Hz),${frequency}\n`;
+    csvContent += `Load Resistance (Ω),${loadResistance}\n`;
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
+    let encodedUri = encodeURI(csvContent);
+    let link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "waveform_data.csv");
+    link.setAttribute("download", "simulation_data.csv");
     document.body.appendChild(link);
     link.click();
 }
